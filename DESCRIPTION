@@ -1,0 +1,35 @@
+Package: YelpFusion
+Type: Package
+Title: Data on Coffee Shops in New York, Yelp Fusion, Search/Reviews API
+Version: 0.1.0
+Authors@R: person("Nashrah", "Ahmed", , "nashrah.ahmed1@gmail.com", role = c("aut", "cre"))
+Description: Provides code and data from Yelp Fusion, Search/Reviews API for coffe shops in New York.
+License: MIT + file LICENSE
+URL: https://github.com/Nashrah123/
+Encoding: UTF-8
+LazyData: true
+Suggests:
+    knitr,
+    rmarkdown,
+    tidyverse,
+    tidyr,
+    reshape2,
+    tidytext,
+    magrittr,
+    plyr,
+    reshape2,
+    dplyr,
+    yelpr,
+    qpcR,
+    curl,
+    httr,
+    jsonlite,
+    RCurl,
+    magrittr,
+    dplyr,
+    stringr,
+    stringi,
+    ggplot2,
+    broom
+VignetteBuilder: knitr
+RoxygenNote: 6.0.1.9000

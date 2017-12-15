@@ -1,0 +1,570 @@
+---
+title: "YelpFusion_CoffeeShops_NY"
+author: "Nashrah Ahmed"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Vignette Title}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+
+if (!require("reshape2"))
+{
+  install.package("reshape2")
+}
+if (!require("knitr"))
+{
+  install.package("knitr")
+}
+if (!require("rmarkdown"))
+{
+  install.package("rmarkdown")
+}
+if (!require("httr"))
+{
+  install.package("httr")
+}
+if (!require("ROAuth"))
+{
+  install.package("ROAuth")
+}
+if (!require("curl"))
+{
+  install.package("curl")
+}
+if (!require("qpcR"))
+{
+  install.package("qpcR")
+}
+if (!require("RCurl"))
+{
+  install.package("RCurl")
+}
+if (!require("stringr"))
+{
+  install.packages("stringr")
+}
+library(stringr)
+
+if (!require("magrittr"))
+{
+  install.packages("magrittr")
+}
+if (!require("stringi"))
+{
+  install.packages("stringi")
+}
+if (!require("tidytext"))
+{
+  install.packages("tidytext")
+}
+if (!require("reshape2"))
+{
+  install.packages("reshape2")
+}
+if (!require("tidyr"))
+{
+  install.packages("tidyr")
+}
+
+token <- c("qjkwA9R4Xc9Edb-YRdbR1C9ikqqNeTyDU0duaQPYOCTz7cyHle4psqmpz5wqcmcUhq0c4BeSXeZHrx69vZUXrV1MW9trUQ-HG_uw1xoK3U685ivTA32okZOBfBErWnYx")
+```
+
+```{r, fig.show='hold'}
+library(rmarkdown)
+library(knitr)
+library(tidyverse)
+library(tidyr)
+library(reshape2)
+library(tidytext)
+library(magrittr)
+library(plyr)
+library(reshape2)
+library(dplyr)
+library(yelpr)
+library(qpcR)
+library(curl)
+library(httr)
+library(jsonlite)
+library(RCurl)
+library(magrittr)
+library(dplyr)
+library(stringr)
+library(stringi)
+library(ggplot2)
+library(broom)
+```
+
+# Yelp Fusion API: Analysis #1
+## Setup for access to the Yelp Fusion, Search API which includes business ID, rating, name, price, rating, review count, alias, title, distance, image url, is_closed, transactions, phone, and reference data for the location. The parameters such as term, location, limit, and offset are included in the url. 
+### Note: The API can only return up to 1,000 results at this time. The API doesn't allow more than 50 per request. You need to use the offset parameter to get the next page of results. (For using offset, give it any number. If you have limit=50, that means you're getting results 1-50, so give it offset=51 and you'll get 51-100). Using the offset and limit parameters, you can get up to 1000 businesses from this endpoint if there are more than 1000 results. If you request a page out of this 1000 business limit, this endpoint will return an error.
+```{r}
+#Documentation: https://www.yelp.com/developers/documentation/v3/business_search
+#Yelp Fusion, Search API: This endpoint returns up to 1000 businesses based on the provided search criteria. It has some basic information about the business. To get detailed information and reviews, please use the business id returned here and refer to /businesses/{id} and /businesses/{id}/reviews endpoints.
+##Note: at this time, the API does not return businesses without any reviews.
+#Endpoint: https://api.yelp.com/v3/businesses/search
+
+#Parameters:
+term <- c("coffee")
+location <- "New York, NY"
+limit <- 50
+offset <- seq(0, 950, 50)
+
+#Test authentification:
+(url <-
+    modify_url("https://api.yelp.com", path = c("v3", "businesses", "search"),
+               query = list(term = term,
+                            location = location, limit = limit)))
+res <- GET(url, add_headers('Authorization' = paste("Bearer", token)))
+
+#checkstatus:
+http_status(res)
+
+```
+
+# Yelp Fusion API: Analysis #1
+## Loop to pull max amoumnt of data for specified business: "coffee" in "New York, NY". The data includes business ID, name, price, rating, review_count, city, state, and zip code. The data is then transformed to desired format.
+```{r}
+
+yelp_fusion <- "https://api.yelp.com"
+yf <- data.frame()
+for(i in 1:20) {
+  (url <- modify_url(
+    yelp_fusion,
+    path = c("v3", "businesses", "search"),
+    query = list(
+      term = term,
+      location = location,
+      limit = limit,
+      offset = offset[i]
+    )
+  ))
+  
+  l = GET(url, add_headers('Authorization' = paste("Bearer", token)))
+  m = content(l)
+  n = jsonlite::fromJSON(toJSON(m))
+  
+  yf_output = tryCatch({
+    data.frame(n)
+  }, error = function(e) {
+    NULL
+  })
+  
+  if (!is.null(yf_output)) {
+    yf <-
+      rbind(
+        yf,
+        data.frame(
+          'id' = unlist(yf_output$businesses.id),
+          'name' = unlist(yf_output$businesses.name),
+          'price' = unlist(as.character(yf_output$businesses.price)),
+          'rating' = unlist(yf_output$businesses.rating),
+          'review_count' = unlist(yf_output$businesses.review_count),
+          'city' = unlist(yf_output$businesses.location$city),
+          'state' = unlist(yf_output$businesses.location$state),
+          'zip_code' = unlist(yf_output$businesses.location$zip_code)
+        )
+      )
+  }
+}
+
+yf <- yf %>% 
+  distinct(name, .keep_all = TRUE) %>% 
+  arrange(desc(rating))
+yf
+
+```
+
+# Yelp Fusion API: Analysis #1
+## Descriptive statistics: Plot #1) Maps Yelp raings vs review counts for NY coffee shops   
+```{r}
+ggplot(yf, aes(x = factor(rating) , y = review_count)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(position = position_jitter(height = 0, width = 0.25), shape = 1, alpha = 0.4, color = "blue") +
+  labs(title="Yelp: Rating vs Review Count for New York Coffee Shops") +
+  labs(x="Rating", y="Review Count") +
+  geom_hline(yintercept = 0, size = 1, color = "darkgreen") +
+  theme_minimal()
+```
+
+# Yelp Fusion API: Analysis #1
+# Descriptive statistics: Plot #2) Maps Yelp prices vs review counts for NY coffee shops  
+```{r}
+ggplot(yf, aes(x = factor(price), y = review_count)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(position = position_jitter(height = 0, width = 0.25), shape = 1, alpha = 0.4, color = "purple") +
+  labs(title="Yelp: Price vs Review Count for New York Coffee Shops") +
+  labs(x="Price", y="Review Count") +
+  geom_hline(yintercept = 0, size = 1, color = "darkgreen") +
+  theme_minimal()
+```
+
+# Yelp Fusion API: Analysis #1
+## Descriptive statistics: Plot #3) Maps Yelp prices vs ratings for NY coffee shops  
+```{r}
+ggplot(yf, aes(x = factor(price) , y = rating)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(position = position_jitter(height = 0, width = 0.25), shape = 1, alpha = 0.4, color = "red") +
+  labs(title="Yelp: Price vs Rating for New York Coffee Shops") +
+  labs(x="Price", y="Rating") +
+  geom_hline(yintercept = 0, size = 1, color = "darkgreen") +
+  theme_minimal()
+```
+
+# Yelp Fusion API: Analysis #1
+## Descriptive statistics: Plot #4) Maps location (filtered for 5 boroughs) vs ratings for NY coffee shops  
+```{r}
+ggplot(subset(yf, city %in% c("Brooklyn", "New York", "Staten Island", "Queens", "Bronx")),
+  aes(x = factor(city), y = rating)) +
+  geom_boxplot(outlier.shape = NA) +
+  geom_jitter(position = position_jitter(height = 0, width = 0.25), shape = 1, alpha = 0.4, color = "orange") +
+  labs(title="Yelp: Price vs Rating for New York Coffee Shops") +
+  labs(x="city", y="Rating") +
+  geom_hline(yintercept = 0, size = 1, color = "darkgreen") +
+  theme_minimal()
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Loop extracts the id from the Yelp Fusion, Search API data to generate urls for Yelp Fusion, Reviews Api. The urls are then transformed to the desired format and the final dataset is saved as "Yelp_Coffee_URL_Data.rds".
+```{r}
+
+id_yf <- yf %>% 
+  select_(id = "id")
+
+x <- nrow(yf)
+  
+id_list <- capture.output({for (i in 1:x){
+id <- as.character(id_yf$id)[i]
+root <- "https://api.yelp.com"
+u <- paste(root, "/v3", "/businesses/", id, "/reviews", sep = "")
+  if (u=="") {
+  warning("error")}
+  else {
+  print(u)
+}}})
+
+#Format list:
+#extract url
+
+url_list1 <- str_replace(id_list, "^[[:punct:]][1][[:punct:]][[:space:]][[:punct:]]", "")
+
+final_url_list <- str_replace(url_list1, "[[:punct:]]$", "")
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Test run
+### Setup for access to the Yelp Fusion, Reviews API which includes business reviews, url, rating, time_created, user, user name, and user image url. The parameter, locale, determines the language of reviews to return (default is English). The API allows 3 review excerpts of 160 characters, and use a variety of factors to determine and return a business's top review excerpts which can not be altered. The loop below only pulls one per business. See, https://www.yelp.com/developers/faq for more information.
+```{r}
+#Documentation: https://www.yelp.com/developers/documentation/v3/business_reviews
+#Yelp Fusion, Reviews API: This endpoint returns the up to three reviews of a business.
+##Note: at this time, the API does not return businesses without any reviews.
+#Endpoint: https://api.yelp.com/v3/businesses/{id}/reviews
+
+yelp_fusionr <- "https://api.yelp.com"
+yfr <- data.frame()
+for(i in 1:20) {
+  (url2 <- modify_url(
+    yelp_fusionr,
+    path = c("v3", "businesses", "housing-works-bookstore-cafe-new-york-3", "reviews")
+    )
+  )
+  
+  h = GET(url2, add_headers('Authorization' = paste("Bearer", token)))
+  j = content(h)
+  k = jsonlite::fromJSON(toJSON(j))
+  
+  yf_outputr = tryCatch({
+    data.frame(j)
+  }, error = function(e) {
+    NULL
+  })
+  
+  if (!is.null(yf_outputr)) {
+    yfr <-
+      rbind(
+        yfr,
+        data.frame(
+          'name' = unlist(yf_outputr$reviews.user.name),
+          'text' = unlist(yf_outputr$reviews.text),
+          'rating' = unlist(yf_outputr$reviews.rating),
+          'url' = unlist(as.character(yf_outputr$reviews.url))
+        )
+      )
+  }
+}
+
+yfr <- yfr %>% 
+  distinct(name, .keep_all = TRUE)
+yfr
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Loop for full list of reviews from Yelp Fusion, Reviews API for specified business: "coffee" in "New York, NY".
+```{r}
+
+f <- data.frame()  
+for(i in 1:x){
+  url2 <- final_url_list[i]
+  if(url2=="") {
+    warning("error") }
+    else {
+  a <- GET(url2, add_headers('Authorization' = paste("Bearer", token)))
+  b <- content(a)
+  c <- jsonlite::fromJSON(toJSON(b))
+
+  d = tryCatch({
+    data.frame(b)
+  }, error = function(e) {
+    NULL
+  })
+  
+  if (!is.null(d)) {
+    f <-
+      rbind(
+        f,
+        data.frame(
+          'user_name' = unlist(d$reviews.user.name),
+          'text' = unlist(d$reviews.text),
+          'rating' = unlist(d$reviews.rating),
+          'url' = unlist(as.character(d$reviews.url))
+        )
+      )
+  }
+}}
+
+f <- f %>% 
+  distinct(name, .keep_all = TRUE)
+f
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Transform data columns to appropriate format to allow merger of Yelp Fusion Search & Rewiews data sets, later on. The data is saved as "Yelp_Coffee_TextReviews_Data.rds".
+```{r}
+#extract id
+
+id3 <- stri_match_first_regex(f$url, "(.*?)\\?")[,2]
+
+id2 <- substring(id3, regexpr("z/", id3) + 1)
+
+id1 <- substring(id2, regexpr("/", id2) + 1)
+
+#add as a column to f.db
+
+f$id<- id1
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Merge data sets for Yelp Fusion Search & Reviews.The complete data set is saved as "Yelp_Coffee_Full_Data.rds".
+```{r}
+
+Yelp_full <- inner_join(f, yf, by = "id")
+
+Yelp_full
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Text mining technique using Tidytext.
+### Plot shows count associated with each word (limited to n>20) from excerpts of 1 review per business.
+```{r}
+text1 <- Yelp_full %>%
+  select_(text = "text")
+
+tn <- nrow(text1)
+
+class(text1)
+
+text2 <- data.frame(lapply(text1, as.character), stringsAsFactors=FALSE)
+
+text_df <- data.frame(line = 1:tn, text2)
+text_df
+
+##tidytext stop words
+data(stop_words)
+
+plot_tcount <- text_df %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words, by=c("word"="word")) %>%
+  count("word", wt_var = NULL) %>%
+  filter(freq > 20) %>%
+  arrange(desc(freq)) %>%
+  mutate(word = reorder(word, freq)) %>%
+  ggplot(aes(word, freq)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+
+plot_tcount
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Text mining techniques (NCR & Bing) "constructed via either crowdsourcing (using, for example, Amazon Mechanical Turk) or by the labor of one of the authors, and were validated using some combination of crowdsourcing again, restaurant or movie reviews, or Twitter data", http://tidytextmining.com/tidytext.html.
+### Plot shows count of words per "NCR" sentiment: joy, fear, negative, sadness, anger, surprise, positive, disgust, anticipation, and trust. Sentiments such as positive, joy, and trust appear the most popular which indicate overall high/satisfactory quality for coffee shops in New York.
+```{r}
+#learn NCR sentiments and sum words from Yelp reviews per sentiment
+ncr <- get_sentiments("nrc")
+ncr_sent_groupings <- unique(ncr$sentiment, incomparables = FALSE)
+ncr_sent_groupings
+
+nrc_joy <- get_sentiments("nrc") %>% 
+  filter(sentiment == "joy")
+nrc_fear <- get_sentiments("nrc") %>% 
+  filter(sentiment == "fear")
+nrc_negative <- get_sentiments("nrc") %>% 
+  filter(sentiment == "negative")
+nrc_sadness <- get_sentiments("nrc") %>% 
+  filter(sentiment == "sadness")
+nrc_anger <- get_sentiments("nrc") %>% 
+  filter(sentiment == "anger")
+nrc_surprise <- get_sentiments("nrc") %>% 
+  filter(sentiment == "surprise")
+nrc_positive <- get_sentiments("nrc") %>% 
+  filter(sentiment == "positive")
+nrc_disgust <- get_sentiments("nrc") %>% 
+  filter(sentiment == "disgust")
+nrc_anticipation <- get_sentiments("nrc") %>% 
+  filter(sentiment == "anticipation")
+nrc_trust <- get_sentiments("nrc") %>% 
+  filter(sentiment == "trust")
+
+ncr_sent_joy <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_joy) %>%
+  count("word", wt_var = NULL)
+joy <- sum(ncr_sent_joy$freq)
+joy
+
+ncr_sent_fear <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_fear) %>%
+  count("word", wt_var = NULL)
+fear <- sum(ncr_sent_fear$freq)
+fear
+
+ncr_sent_negative <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_negative) %>%
+  count("word", wt_var = NULL)
+negative <- sum(ncr_sent_negative$freq)
+negative
+
+ncr_sent_sadness <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_sadness) %>%
+  count("word", wt_var = NULL)
+sadness <- sum(ncr_sent_sadness$freq)
+sadness
+
+ncr_sent_anger <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_anger) %>%
+  count("word", wt_var = NULL)
+anger <- sum(ncr_sent_anger$freq)
+anger
+
+ncr_sent_surprise <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_surprise) %>%
+  count("word", wt_var = NULL)
+surprise <- sum(ncr_sent_surprise$freq)
+surprise
+
+ncr_sent_positive <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_positive) %>%
+  count("word", wt_var = NULL)
+positive <- sum(ncr_sent_positive$freq)
+positive
+
+ncr_sent_disgust <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_disgust) %>%
+  count("word", wt_var = NULL)
+disgust <- sum(ncr_sent_disgust$freq)
+disgust
+
+ncr_sent_anticipation <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_anticipation) %>%
+  count("word", wt_var = NULL)
+anticipation <- sum(ncr_sent_anticipation$freq)
+anticipation
+
+ncr_sent_trust <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(nrc_trust) %>%
+  count("word", wt_var = NULL)
+trust <- sum(ncr_sent_trust$freq)
+trust
+
+sentiment_scores <- as.data.frame(cbind(trust, anger, anticipation, disgust, fear, joy, negative, positive, sadness, surprise))
+
+sentiment_scores.df <- melt(sentiment_scores)
+sentiment_scores.df <- sentiment_scores.df %>%
+  arrange(desc(value))
+
+sentiment_scores.df
+
+##arrange bars in order
+
+sentiment_scores.df$variable <- factor(sentiment_scores.df$variable, levels = sentiment_scores.df$variable[order(sentiment_scores.df$value)])
+sentiment_scores.df$variable
+
+plot_scount <- sentiment_scores.df %>%
+  ggplot(aes(variable, value, fill=variable)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+  geom_bar(stat = "identity")
+
+plot_scount
+
+```
+
+# Yelp Fusion API: Analysis #2, Text Analysis
+## Text mining techniques (NCR & Bing) "constructed via either crowdsourcing (using, for example, Amazon Mechanical Turk) or by the labor of one of the authors, and were validated using some combination of crowdsourcing again, restaurant or movie reviews, or Twitter data", http://tidytextmining.com/tidytext.html.
+### Plot shows count of words per "Bing" sentiment: positive, negative, and overall sentiment (postive - negative).
+```{r}
+bing <- get_sentiments("bing")
+
+bing_sentiment <- text_df %>%
+  unnest_tokens(word, text) %>%
+  inner_join(get_sentiments("bing"), by=c("word"="word")) %>%
+  count("sentiment", wt_var = NULL)
+  
+net_sentiment <- bing_sentiment %>%
+  mutate(netsentiment = freq - first(freq))
+
+net_sentiment1 <- net_sentiment$netsentiment
+
+net_sentiment2 <- net_sentiment1[2]
+
+bing_sentiment_scores <- as.data.frame(rbind(bing_sentiment, net_sentiment2))
+
+bing_sentiment_scores$sentiment <- with(bing_sentiment_scores, ifelse(sentiment=="1338", "net sentiment", sentiment))
+bing_sentiment_scores
+
+##plot
+
+plot_bcount <- bing_sentiment_scores %>%
+  ggplot(aes(sentiment, freq, fill=sentiment)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+  geom_bar(stat = "identity")
+
+plot_bcount
+
+```

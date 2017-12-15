@@ -1,0 +1,17 @@
+---
+title: "README"
+author: "Nashrah Ahmed"
+date: "October 17, 2017"
+output: html_document
+---
+
+## YelpFusion
+
+The package provides sample data from the Yelp Fusion, Search and Reviews API on coffee shops in New York.
+
+## License: 
+
+MIT + file LICENSE
+
+YEAR: 2017
+COPYRIGHT HOLDER: Nashrah Ahmed
